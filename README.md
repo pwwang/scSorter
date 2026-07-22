@@ -19,6 +19,7 @@ The original scSorter requires raw expression matrices. This fork adds **native 
 | Automatic variable feature selection | ❌ | ✅ |
 | Sets Seurat identity class automatically | ❌ | ✅ |
 | Expression filtering by detection rate (`min_pct`) | ❌ | ✅ |
+| Allowing all markers to be missed in object for certain cell types | ❌ | ✅ |
 
 ## Installation
 
@@ -60,3 +61,5 @@ DimPlot(result_obj, label = TRUE)
 | `set_ident` | Set predicted cell types as active Seurat identity | `TRUE` |
 | `name` | Metadata column name for predictions | `"scSorter_cell_type"` |
 | `...` | Additional arguments passed to `scSorter()` | — |
+
+

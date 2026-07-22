@@ -19,7 +19,10 @@ update_C = function(dat, mu_mat, designmat){
 
   base_mu_vec = rep(0, ncmk)
   for(bv in 1:ncmk){
-    base_mu_vec[bv] = mu_mat[bv, which(designmat[bv,] == 0)[1]]  # a tiny change here
+    zero_cols = which(designmat[bv,] == 0)
+    if (length(zero_cols) > 0) {
+      base_mu_vec[bv] = mu_mat[bv, zero_cols[1]]
+    }
   }
 
   ## I re-wrote this block to make it ~60 times faster.

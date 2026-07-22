@@ -27,9 +27,16 @@ data_preprocess = function(expr, anno_processed) {
     designmat = designmat[markers_avail, ]
     csdmat = colSums(designmat)
 
-    if(sum(csdmat > 0) < ncol(designmat)) {
-      stop(paste('None of the marker genes specfied for the following cell types could be found from the expression data: ',
-                    paste(colnames(designmat)[csdmat == 0], collapse = ', '), '. \n Please maker sure the marker gene names are correctly specified.', sep = ''))
+    if (all(csdmat == 0)) {
+      stop('No markers in the annotation are found from the expression data. Please check your input data and annotation information.')
+    }
+    # Remove cell types with no marker genes available
+    zero_cols = which(csdmat == 0)
+    if (length(zero_cols) > 0) {
+      warning(paste('The following cell types have no marker genes available and will be removed: ',
+                    paste(colnames(designmat)[zero_cols], collapse = ', '), '.', sep = ''))
+      designmat = designmat[, -zero_cols, drop = FALSE]
+      weightmat = weightmat[, -zero_cols, drop = FALSE]
     }
   }
 

@@ -2,7 +2,7 @@
 #'
 #' Solves mu and delta given sample cluster assignment.
 #' @keywords internal
-#' 
+#'
 #' @param dat A matrix of input data.
 #' @param designmat An indicator variable matrix records marker genes of each pre-specified cell type.
 #' @param clus A vector of cluster assignment.
@@ -36,6 +36,7 @@ update_mu = function(dat, designmat, clus){
     marker_clus = which(designmat[idx, ]==1)
     non_empty_marker_clus = uc[uc %in% marker_clus]
     if(length(non_empty_marker_clus)==0)return(mu_mat)
+    if(length(which(designmat[idx,]==0))==0)return(mu_mat)
 
     base_mu = mu_mat[idx, which(designmat[idx,]==0)[1]]
     #pick out the samples satisfy delta < 2(x-mu) and calculate delta by an iterative approach
@@ -69,6 +70,7 @@ update_mu = function(dat, designmat, clus){
   update_basemu = function(idx, mu_mat, designmat){
     marker_clus = which(designmat[idx, ]==1)
     non_empty_marker_clus = uc[uc %in% marker_clus]
+    if(length(which(designmat[idx,]==0))==0)return(mu_mat)
     base_mu = mu_mat[idx, which(designmat[idx,]==0)[1]]
     if(length(non_empty_marker_clus)==0){
       mu_mat[idx,designmat[idx,]==0]=mean(dat[idx,])

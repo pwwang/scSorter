@@ -2,7 +2,7 @@
 #'
 #' Calculates the cost.
 #' @keywords internal
-#' 
+#'
 #' @param dat A matrix of input data.
 #' @param clus A vector of predicted cell types.
 #' @param mu Parameter estimates from \code{update_mu}.
@@ -17,7 +17,10 @@ cost_func = function(dat, clus, mu, designmat){
 
   base_mu_vec = rep(0, nmk)
   for(bv in 1:nmk){
-    base_mu_vec[bv] = mu[bv, which(designmat[bv,] == 0)[1]]
+    zero_cols = which(designmat[bv,] == 0)
+    if (length(zero_cols) > 0) {
+      base_mu_vec[bv] = mu[bv, zero_cols[1]]
+    }
   }
 
   delta <- mu[1:nmk,]*designmat
