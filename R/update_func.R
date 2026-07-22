@@ -2,14 +2,14 @@
 #'
 #' Implements the scSorter method by iteratively running \code{update_mu} and \code{update_C}.
 #' @keywords internal
-#' 
+#'
 #' @param dat A matrix of input data.
 #' @param design_mat An indicator variable matrix records specified marker genes of each cell type.
 #' @param weightmat A matrix of weights assigned to each marker gene.
 #' @param unknown_threshold1 The parameter determines undecided cells cutoff. The default value is 0.
 #' @param unknown_threshold2 The parameter determines whether undecided cells are further processed. The default value is 0.05.
 #' @param max_iter The maximum number of iterations for the algorithm to update parameters. The default value is 100.
-#'
+#' @importFrom stats sd pchisq
 #' @return A list contains parameter estimates, type assignments, and the corresponding cost.
 #'
 

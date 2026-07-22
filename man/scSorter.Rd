@@ -42,10 +42,3 @@ A list contains the elements:
 \description{
 This is the main function that implements the scSorter method.
 }
-\examples{
-load(system.file('extdata', 'example_data.RData', package = 'scSorter'))
-result = scSorter(expr, anno)
-misclassification_rate = 1 - mean(result$Pred_Type == true_type)
-table(result$Pred_Type, true_type)
-
-}

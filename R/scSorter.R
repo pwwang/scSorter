@@ -18,14 +18,6 @@
 #'  \code{Pred_param}: The parameter estimates of \code{mu} and \code{delta}.
 #'
 #' @export
-#'
-#' @examples
-#' load(system.file('extdata', 'example_data.RData', package = 'scSorter'))
-#' result = scSorter(expr, anno)
-#' misclassification_rate = 1 - mean(result$Pred_Type == true_type)
-#' table(result$Pred_Type, true_type)
-#'
-
 scSorter = function(expr, anno, default_weight = 2, n_start = 10, alpha = 0, u = 0.05, max_iter = 100, setseed = 0){
   #this is a wrapper function that implements the whole method based on the rest functions.
   #Rfast package is needed to run this method.
@@ -58,4 +50,48 @@ scSorter = function(expr, anno, default_weight = 2, n_start = 10, alpha = 0, u =
   pred_mu = c_mu[[pk]]
 
   return(list(Pred_Type = pred_clus, Pred_param = pred_mu))
+}
+
+
+#' Run scSorter on a Seurat object
+#'
+#' This function runs the scSorter method on a Seurat object.
+#'
+#' @inheritParams scSorter
+#' @param object A Seurat object containing the expression data.
+#' `FindVariableFeatures` should be run on the Seurat object before using this function.
+#' @param layer The name of the layer in the Seurat object to use for expression data. If NULL, the default data will be used. The default value is NULL.
+#' @param assay The name of the assay in the Seurat object to use for expression data. If NULL, the default assay will be used. The default value is NULL.
+#' @param top_vf The number of top variable features to use for scSorter. If NULL, all variable features will be used. The default value is NULL.
+#' @param min_pct The minimum fraction of cells that must have non-zero expression for a gene to be retained. The default value is 0.1.
+#' @param set_ident A logical value indicating whether to set the predicted cell types as the active identity class in the Seurat object. The default value is TRUE.
+#' @param name The name of the metadata column to store the predicted cell types. The default value is "scSorter_cell_type".
+#' @param ... Additional arguments to pass to the scSorter function.
+#' @return The Seurat object with the predicted cell types added to the metadata.
+#' @importFrom SeuratObject VariableFeatures GetAssayData
+#' @export
+RunScSorter <- function(object, anno, layer = NULL, assay = NULL, top_vf = 2000, min_pct = 0.1, set_ident = TRUE, name = "scSorter_cell_type", ...){
+  if (!inherits(object, "Seurat")) {
+    stop("The input object must be a Seurat object.")
+  }
+
+  if (is.null(top_vf)) {
+    hvf <- VariableFeatures(object)
+  } else {
+    hvf <- utils::head(VariableFeatures(object), top_vf)
+  }
+
+  expr <- GetAssayData(object, layer = layer, assay = assay)
+  hvf_filter <- rowSums(as.matrix(expr)[hvf, ] != 0) > ncol(expr) * min_pct
+  hvf <- hvf[hvf_filter]
+
+  picked_genes <- unique(c(anno$Marker, hvf))
+  expr <- expr[intersect(rownames(expr), picked_genes), , drop = FALSE]
+
+  result <- scSorter(expr, anno, ...)
+  object@meta.data[[name]] <- factor(result$Pred_Type, levels = sort(unique(result$Pred_Type)))
+  if (set_ident) {
+    SeuratObject::Idents(object) <- name
+  }
+  return(object)
 }

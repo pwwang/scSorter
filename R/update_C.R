@@ -2,7 +2,7 @@
 #'
 #' Updates cluster assignments based on center estimates from \code{update_mu}
 #' @keywords internal
-#' 
+#'
 #' @param dat A matrix of input data.
 #' @param mu_mat Center estimates from \code{update_mu}
 #' @param designmat An indicator variable matrix records specified marker genes of each cell type.
@@ -43,7 +43,7 @@ update_C = function(dat, mu_mat, designmat){
   # I also re-wrote the rest to make it quicker and more concise
   # typically tie is not a big problem as it happens rarely; but if you indeed
   # worry about it, my code gives an easy way to get around it.
-  dat_dist_mat_rand <- dat_dist_mat + rnorm(length(dat_dist_mat)) * .Machine$double.eps ^ 0.5
+  dat_dist_mat_rand <- dat_dist_mat + stats::rnorm(length(dat_dist_mat)) * .Machine$double.eps ^ 0.5
   clus <- apply(dat_dist_mat_rand, 1, which.min)
 
   return(list(clus, dat_dist_mat_mk_cache))
