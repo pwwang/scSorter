@@ -65,12 +65,12 @@ scSorter = function(expr, anno, default_weight = 2, n_start = 10, alpha = 0, u =
 #' @param top_vf The number of top variable features to use for scSorter. If NULL, all variable features will be used. The default value is NULL.
 #' @param min_pct The minimum fraction of cells that must have non-zero expression for a gene to be retained. The default value is 0.1.
 #' @param set_ident A logical value indicating whether to set the predicted cell types as the active identity class in the Seurat object. The default value is TRUE.
-#' @param name The name of the metadata column to store the predicted cell types. The default value is "scSorter_cell_type".
+#' @param name The name of the metadata column to store the predicted cell types. The default value is "scSorter_celltype".
 #' @param ... Additional arguments to pass to the scSorter function.
 #' @return The Seurat object with the predicted cell types added to the metadata.
 #' @importFrom SeuratObject VariableFeatures GetAssayData
 #' @export
-RunScSorter <- function(object, anno, layer = NULL, assay = NULL, top_vf = 2000, min_pct = 0.1, set_ident = TRUE, name = "scSorter_cell_type", ...){
+RunScSorter <- function(object, anno, layer = NULL, assay = NULL, top_vf = 2000, min_pct = 0.1, set_ident = TRUE, name = "scSorter_celltype", ...){
   if (!inherits(object, "Seurat")) {
     stop("The input object must be a Seurat object.")
   }

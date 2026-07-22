@@ -12,7 +12,7 @@ RunScSorter(
   top_vf = 2000,
   min_pct = 0.1,
   set_ident = TRUE,
-  name = "scSorter_cell_type",
+  name = "scSorter_celltype",
   ...
 )
 }
@@ -34,7 +34,7 @@ It should contain three columns named "Type", "Marker", and "Weight" that record
 
 \item{set_ident}{A logical value indicating whether to set the predicted cell types as the active identity class in the Seurat object. The default value is TRUE.}
 
-\item{name}{The name of the metadata column to store the predicted cell types. The default value is "scSorter_cell_type".}
+\item{name}{The name of the metadata column to store the predicted cell types. The default value is "scSorter_celltype".}
 
 \item{...}{Additional arguments to pass to the scSorter function.}
 }

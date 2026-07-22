@@ -44,7 +44,7 @@ result_obj <- RunScSorter(
 )
 
 # Cell type predictions are stored in the metadata and set as the active identity
-table(result_obj$scSorter_cell_type)
+table(result_obj$scSorter_celltype)
 DimPlot(result_obj, label = TRUE)
 ```
 
@@ -59,7 +59,7 @@ DimPlot(result_obj, label = TRUE)
 | `top_vf` | Number of top variable features to include (`NULL` = all) | `2000` |
 | `min_pct` | Minimum fraction of cells expressing a gene to retain it | `0.1` |
 | `set_ident` | Set predicted cell types as active Seurat identity | `TRUE` |
-| `name` | Metadata column name for predictions | `"scSorter_cell_type"` |
+| `name` | Metadata column name for predictions | `"scSorter_celltype"` |
 | `...` | Additional arguments passed to `scSorter()` | — |
 
 
