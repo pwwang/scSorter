@@ -1,7 +1,7 @@
 Package: scSorter
 Type: Package
 Title: Implementation of 'scSorter' Algorithm
-Version: 0.0.2
+Version: 0.1.0
 Authors@R: c(
     person("Hongyu", "Guo", email = "hguo2@nd.edu", role = c("aut")),
     person("Jun", "Li", email = "jun.li@nd.edu",role = c("aut", "cre"))

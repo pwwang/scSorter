@@ -1,0 +1,34 @@
+package:
+  name: r-scsorter
+  version: 0.1.0
+
+source:
+  path: ..
+
+build:
+  number: 1
+  rpaths:
+    - lib/R/lib/
+    - lib/
+
+requirements:
+  host:
+    # Imports
+    - r-base
+    - r-seurat
+
+  run:
+    # Imports
+    - r-base
+    - r-seurat
+
+test:
+  commands:
+    - $R -e "library(scSorter); library(stats); library(SeuratObject)"
+
+about:
+  home: https://github.com/pwwang/scSorter
+  license: GPL-3
+  summary: scSorter is an R package for assigning cells to known cell types according to known marker genes.
+  license_family: GPL
+  license_file: DESCRIPTION
