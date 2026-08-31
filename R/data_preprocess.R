@@ -13,8 +13,8 @@ data_preprocess <- function(expr, anno_processed) {
   designmat <- anno_processed[[1]]
   weightmat <- anno_processed[[2]]
 
-  rownames(expr) <- toupper(rownames(expr))
-  rownames(designmat) <- toupper(rownames(designmat))
+  rownames(expr) <- make.unique(toupper(rownames(expr)))
+  rownames(designmat) <- make.unique(toupper(rownames(designmat)))
 
   markers <- rownames(designmat)
 
