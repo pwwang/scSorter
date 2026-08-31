@@ -18,36 +18,54 @@
 #'  \code{Pred_param}: The parameter estimates of \code{mu} and \code{delta}.
 #'
 #' @export
-scSorter = function(expr, anno, default_weight = 2, n_start = 10, alpha = 0, u = 0.05, max_iter = 100, setseed = 0){
+scSorter <- function(
+  expr,
+  anno,
+  default_weight = 2,
+  n_start = 10,
+  alpha = 0,
+  u = 0.05,
+  max_iter = 100,
+  setseed = 0
+) {
   #this is a wrapper function that implements the whole method based on the rest functions.
   #Rfast package is needed to run this method.
-  anno_processed = design_matrix_builder(anno, default_weight)
-  dt = data_preprocess(expr, anno_processed)
+  anno_processed <- design_matrix_builder(anno, default_weight)
+  dt <- data_preprocess(expr, anno_processed)
 
-  dat = dt[[1]]
-  designmat = dt[[2]]
-  weightmat = dt[[3]]
+  dat <- dt[[1]]
+  designmat <- dt[[2]]
+  weightmat <- dt[[3]]
 
-  c_cost = NULL
-  c_mu = list()
-  c_clus = list()
+  c_cost <- NULL
+  c_mu <- list()
+  c_clus <- list()
 
-  for(i in 1:n_start){
-    set.seed(i+setseed)
-    t1 = Sys.time()
-    pred_ot = update_func(as.matrix(dat), designmat, weightmat, unknown_threshold1 = alpha, unknown_threshold2 = u, max_iter = max_iter)
-    t2 = Sys.time()
+  for (i in 1:n_start) {
+    set.seed(i + setseed)
+    t1 <- Sys.time()
+    pred_ot <- update_func(
+      as.matrix(dat),
+      designmat,
+      weightmat,
+      unknown_threshold1 = alpha,
+      unknown_threshold2 = u,
+      max_iter = max_iter
+    )
+    t2 <- Sys.time()
 
-    c_cost = c(c_cost, pred_ot[[3]])
-    c_mu[[i]] = pred_ot[[1]]
-    c_clus[[i]] = pred_ot[[2]]
+    c_cost <- c(c_cost, pred_ot[[3]])
+    c_mu[[i]] <- pred_ot[[1]]
+    c_clus[[i]] <- pred_ot[[2]]
   }
 
-  pk = which.min(c_cost)
+  pk <- which.min(c_cost)
 
-  pred_clus = c_clus[[pk]]
-  pred_clus = c(colnames(designmat), rep('Unknown', ncol(designmat)))[pred_clus]
-  pred_mu = c_mu[[pk]]
+  pred_clus <- c_clus[[pk]]
+  pred_clus <- c(colnames(designmat), rep('Unknown', ncol(designmat)))[
+    pred_clus
+  ]
+  pred_mu <- c_mu[[pk]]
 
   return(list(Pred_Type = pred_clus, Pred_param = pred_mu))
 }
@@ -70,7 +88,17 @@ scSorter = function(expr, anno, default_weight = 2, n_start = 10, alpha = 0, u =
 #' @return The Seurat object with the predicted cell types added to the metadata.
 #' @importFrom SeuratObject VariableFeatures GetAssayData
 #' @export
-RunScSorter <- function(object, anno, layer = NULL, assay = NULL, top_vf = 2000, min_pct = 0.1, set_ident = TRUE, name = "scSorter_celltype", ...){
+RunScSorter <- function(
+  object,
+  anno,
+  layer = NULL,
+  assay = NULL,
+  top_vf = 2000,
+  min_pct = 0.1,
+  set_ident = TRUE,
+  name = "scSorter_celltype",
+  ...
+) {
   if (!inherits(object, "Seurat")) {
     stop("The input object must be a Seurat object.")
   }
@@ -89,7 +117,10 @@ RunScSorter <- function(object, anno, layer = NULL, assay = NULL, top_vf = 2000,
   expr <- expr[intersect(rownames(expr), picked_genes), , drop = FALSE]
 
   result <- scSorter(expr, anno, ...)
-  object@meta.data[[name]] <- factor(result$Pred_Type, levels = sort(unique(result$Pred_Type)))
+  object@meta.data[[name]] <- factor(
+    result$Pred_Type,
+    levels = sort(unique(result$Pred_Type))
+  )
   if (set_ident) {
     SeuratObject::Idents(object) <- name
   }
