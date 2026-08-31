@@ -2,7 +2,7 @@
 #'
 #' Builds the design matrix required by \code{update_func} based on user input.
 #' @keywords internal
-#' 
+#'
 #' @param anno A matrix or data frame that contains marker genes specified for cell types of interest.
 #' @param weight The default weight assigned to marker genes.
 #'
@@ -21,8 +21,8 @@ design_matrix_builder = function(anno, weight){
     anno = anno[, ror]
   }
 
-  celltypes = unique(anno[,1])
-  marker = unique(anno[,2])
+  celltypes = unique(anno[,1,drop=TRUE])
+  marker = unique(anno[,2,drop=TRUE])
 
   nc = length(celltypes)
   nm = length(marker)
