@@ -7,13 +7,15 @@
 #' @param clus A vector of predicted cell types.
 #' @param mu Parameter estimates from \code{update_mu}.
 #' @param designmat An indicator variable matrix records specified marker genes of each cell type.
+#' @param rt_sq Per-cell squared sums of the non-marker block (computed once in
+#' \code{update_func}); recomputed here when not supplied.
 #'
 
-cost_func <- function(dat, clus, mu, designmat) {
+cost_func <- function(dat, clus, mu, designmat, rt_sq = NULL) {
   nmk <- nrow(designmat)
-  ncells <- nrow(dat)
-  uniclus <- sort(unique(clus))
-  cost <- 0
+  ngenes <- nrow(dat)
+  nclus <- ncol(designmat)
+  designmat <- as.matrix(designmat)
 
   base_mu_vec <- rep(0, nmk)
   for (bv in 1:nmk) {
@@ -26,15 +28,32 @@ cost_func <- function(dat, clus, mu, designmat) {
   delta <- mu[1:nmk, ] * designmat
   diff <- dat[1:nmk, ] - base_mu_vec
 
-  for (i in uniclus) {
-    mat1 <- (diff[, clus == i] - delta[, i])^2
-    mat2 <- diff[, clus == i]^2
-    which.smaller <- (mat1 < mat2 - .Machine$double.eps^0.5) * designmat[, i]
-    cost <- cost + sum(mat1 * which.smaller + mat2 * (!which.smaller))
+  ## Marker block: for cell c in cluster clus_c, gene g contributes
+  ## min(diff^2, (diff - delta_g,clus_c)^2) = diff^2 + c*ws with
+  ## c = delta*(delta - 2*diff) and ws = (c < -eps2). The diff^2 part is
+  ## constant across cells (sum(colSums(diff^2))); non-marker genes have
+  ## delta = 0 so their correction is 0.
+  eps2 <- .Machine$double.eps^0.5
+  dcl <- delta[, clus]
+  c <- dcl * (dcl - 2 * diff)
+  ws <- c < -eps2
+  cost <- sum(colSums(diff^2)) + sum(c * ws)
 
-    cost <- cost +
-      sum((dat[(nmk + 1):ncells, clus == i] - mu[(nmk + 1):ncells, i])^2)
+  ## HVG block: sum over cells and genes of (X - mu)^2 splits as
+  ## total(X^2) - 2*sum(mu * per-cluster gene sums) + n * sum(mu^2).
+  ind <- matrix(0, ncol(dat), nclus)
+  ind[cbind(seq_len(ncol(dat)), clus)] <- 1
+  cnt <- colSums(ind)
+  if (is.null(rt_sq)) {
+    hvg_sq_tot <- sum(dat[(nmk + 1):ngenes, , drop = FALSE]^2)
+  } else {
+    hvg_sq_tot <- sum(rt_sq)
   }
+  gene_sums <- dat %*% ind
+  gene_sums <- gene_sums[(nmk + 1):ngenes, , drop = FALSE]
+  mu_hvg <- mu[(nmk + 1):ngenes, , drop = FALSE]
+  cost <- cost + hvg_sq_tot - 2 * sum(gene_sums * mu_hvg) +
+    sum(cnt * colSums(mu_hvg^2))
 
   return(cost)
 }

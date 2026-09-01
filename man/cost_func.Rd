@@ -4,7 +4,7 @@
 \alias{cost_func}
 \title{Cost Function}
 \usage{
-cost_func(dat, clus, mu, designmat)
+cost_func(dat, clus, mu, designmat, rt_sq = NULL)
 }
 \arguments{
 \item{dat}{A matrix of input data.}
@@ -14,6 +14,9 @@ cost_func(dat, clus, mu, designmat)
 \item{mu}{Parameter estimates from \code{update_mu}.}
 
 \item{designmat}{An indicator variable matrix records specified marker genes of each cell type.}
+
+\item{rt_sq}{Per-cell squared sums of the non-marker block (computed once in
+\code{update_func}); recomputed here when not supplied.}
 }
 \description{
 Calculates the cost.

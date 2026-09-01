@@ -12,6 +12,7 @@
 #' @param u The parameter determines whether undecided cells are further processed. The default value is 0.05.
 #' @param max_iter The maximum number of iterations for the algorithm to update parameters. The default value is 100.
 #' @param setseed Random seed for cluster initialization. The default value is 0.
+#' @param mc.cores The number of cores to use for parallel processing. If NULL, the function will use the maximum number of available cores. The default value is NULL.
 #'
 #' @return A list contains the elements:
 #'  \code{Pred_Type}: The predicted cell types.
@@ -26,7 +27,8 @@ scSorter <- function(
   alpha = 0,
   u = 0.05,
   max_iter = 100,
-  setseed = 0
+  setseed = 0,
+  mc.cores = NULL
 ) {
   #this is a wrapper function that implements the whole method based on the rest functions.
   #Rfast package is needed to run this method.
@@ -40,29 +42,49 @@ scSorter <- function(
   designmat <- dt[[2]]
   weightmat <- dt[[3]]
 
-  c_cost <- NULL
-  c_mu <- list()
-  c_clus <- list()
-
-  for (i in 1:n_start) {
-    message(paste0("[scSorter] Running initialization ", i, " of ", n_start, "..."))
-    set.seed(i + setseed)
-    t1 <- Sys.time()
-    pred_ot <- update_func(
-      as.matrix(dat),
-      designmat,
-      weightmat,
-      unknown_threshold1 = alpha,
-      unknown_threshold2 = u,
-      max_iter = max_iter
-    )
-    t2 <- Sys.time()
-    message(paste0("[scSorter] Initialization ", i, " completed in ", round(difftime(t2, t1, units = "secs"), 2), " seconds."))
-
-    c_cost <- c(c_cost, pred_ot[[3]])
-    c_mu[[i]] <- pred_ot[[1]]
-    c_clus[[i]] <- pred_ot[[2]]
+  # The n_start initializations are independent and each is seeded, so they
+  # run in parallel when multiple cores are available. Set
+  # options(mc.cores = 1) for a serial run. Results are identical either way.
+  if (is.null(mc.cores)) {
+    mc.cores <- max(1, min(n_start, getOption("mc.cores", parallel::detectCores())))
   }
+  message(paste0("[scSorter] Running ", n_start, " initializations on ", mc.cores, " core(s)..."))
+
+  if (mc.cores == 1) {
+    pred_ots <- lapply(
+      1:n_start,
+      .scsorter_run_one,
+      dat = dat, designmat = designmat, weightmat = weightmat,
+      alpha = alpha, u = u, max_iter = max_iter, setseed = setseed
+    )
+  } else {
+    # PSOCK workers are fresh R processes that read the BLAS thread-count env
+    # vars at startup, so set the cap in the parent before they launch. Forked
+    # workers would inherit the parent's already-initialized multithreaded
+    # BLAS pool and oversubscribe the machine (n_start workers x 32 BLAS
+    # threads), which runs slower than serial.
+    Sys.setenv(
+      OPENBLAS_NUM_THREADS = "1",
+      MKL_NUM_THREADS = "1",
+      OMP_NUM_THREADS = "1"
+    )
+    cl <- parallel::makePSOCKcluster(mc.cores, outfile = "")
+    on.exit(parallel::stopCluster(cl), add = TRUE)
+    parallel::clusterEvalQ(cl, library(scSorter))
+    # Export the big matrices once per worker; the per-task function below
+    # stays small so parLapply does not re-serialize 160MB for every task.
+    parallel::clusterExport(cl, c("dat", "designmat", "weightmat"), envir = environment())
+    pred_ots <- parallel::parLapply(
+      cl,
+      1:n_start,
+      .scsorter_par_one,
+      alpha = alpha, u = u, max_iter = max_iter, setseed = setseed
+    )
+  }
+
+  c_cost <- vapply(pred_ots, function(x) x[[3]], numeric(1))
+  c_mu <- lapply(pred_ots, function(x) x[[1]])
+  c_clus <- lapply(pred_ots, function(x) x[[2]])
 
   pk <- which.min(c_cost)
 
@@ -75,6 +97,31 @@ scSorter <- function(
   return(list(Pred_Type = pred_clus, Pred_param = pred_mu))
 }
 
+
+# Run one seeded initialization; defined at package level so that it
+# serializes small (no captured 160MB expression matrix).
+.scsorter_run_one <- function(i, dat, designmat, weightmat, alpha, u, max_iter, setseed) {
+  set.seed(i + setseed)
+  t1 <- Sys.time()
+  pred_ot <- update_func(
+    as.matrix(dat),
+    designmat,
+    weightmat,
+    unknown_threshold1 = alpha,
+    unknown_threshold2 = u,
+    max_iter = max_iter
+  )
+  t2 <- Sys.time()
+  message(paste0("[scSorter] Initialization ", i, " completed in ", round(difftime(t2, t1, units = "secs"), 2), " seconds."))
+  return(pred_ot)
+}
+
+# Worker entry for the PSOCK cluster: the expression data is read from the
+# worker's global environment where clusterExport put it.
+.scsorter_par_one <- function(i, alpha, u, max_iter, setseed) {
+  e <- .GlobalEnv
+  return(.scsorter_run_one(i, e$dat, e$designmat, e$weightmat, alpha, u, max_iter, setseed))
+}
 
 #' Run scSorter on a Seurat object
 #'
@@ -89,6 +136,7 @@ scSorter <- function(
 #' @param min_pct The minimum fraction of cells that must have non-zero expression for a gene to be retained. The default value is 0.1.
 #' @param set_ident A logical value indicating whether to set the predicted cell types as the active identity class in the Seurat object. The default value is TRUE.
 #' @param name The name of the metadata column to store the predicted cell types. The default value is "scSorter_celltype".
+#' @param mc.cores The number of cores to use for parallel processing. If NULL, the function will use the maximum number of available cores. The default value is NULL.
 #' @param ... Additional arguments to pass to the scSorter function.
 #' @return The Seurat object with the predicted cell types added to the metadata.
 #' @importFrom SeuratObject VariableFeatures GetAssayData
@@ -102,6 +150,7 @@ RunScSorter <- function(
   min_pct = 0.1,
   set_ident = TRUE,
   name = "scSorter_celltype",
+  mc.cores = NULL,
   ...
 ) {
   if (!inherits(object, "Seurat")) {
@@ -125,7 +174,7 @@ RunScSorter <- function(
   message("[RunScSorter] Running scSorter on the filtered expression data...")
   picked_genes <- unique(c(anno$Marker, hvf))
   expr <- expr[intersect(rownames(expr), picked_genes), , drop = FALSE]
-  result <- scSorter(expr, anno, ...)
+  result <- scSorter(expr, anno, mc.cores = mc.cores, ...)
 
   message("[RunScSorter] Adding predicted cell types to the Seurat object metadata...")
   object@meta.data[[name]] <- factor(

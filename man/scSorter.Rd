@@ -12,7 +12,8 @@ scSorter(
   alpha = 0,
   u = 0.05,
   max_iter = 100,
-  setseed = 0
+  setseed = 0,
+  mc.cores = NULL
 )
 }
 \arguments{
@@ -33,6 +34,8 @@ It should contain three columns named "Type", "Marker", and "Weight" that record
 \item{max_iter}{The maximum number of iterations for the algorithm to update parameters. The default value is 100.}
 
 \item{setseed}{Random seed for cluster initialization. The default value is 0.}
+
+\item{mc.cores}{The number of cores to use for parallel processing. If NULL, the function will use the maximum number of available cores. The default value is NULL.}
 }
 \value{
 A list contains the elements:

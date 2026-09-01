@@ -8,11 +8,20 @@
 #' @param designmat An indicator variable matrix records specified marker genes of each cell type.
 #'
 
-update_C <- function(dat, mu_mat, designmat) {
+update_C <- function(dat, mu_mat, designmat, dat_rt_t = NULL, rt_sq = NULL) {
+  # dat_rt_t: cells x HVG-genes transpose of the (constant) non-marker block,
+  # rt_sq: its per-cell squared sums. Precompute both once in update_func to
+  # avoid re-copying the block every iteration; fall back to computing them
+  # here when not supplied.
   ncmk <- nrow(designmat)
   ngenes <- nrow(dat)
   ncells <- ncol(dat)
   nclusters <- ncol(mu_mat)
+  designmat <- as.matrix(designmat)  # row/column indexing a data.frame is slow
+  if (is.null(dat_rt_t)) {
+    dat_rt_t <- t(dat[(ncmk + 1):ngenes, , drop = FALSE])
+    rt_sq <- rowSums(dat_rt_t^2)
+  }
 
   dat_dist_mat_mk <- dat_dist_mat_mk_cache <- matrix(0, ncells, nclusters)
 
@@ -25,8 +34,11 @@ update_C <- function(dat, mu_mat, designmat) {
   }
 
   ## Marker block: non-marker genes contribute the same diff^2 to every
-  ## cluster, so sum them once (base) and only loop over each cluster's
-  ## own marker genes.
+  ## cluster, so sum them once (base) and only loop over each cluster's own
+  ## marker genes. Per gene/cell, min(diff^2, (diff - delta)^2) = diff^2 +
+  ## c*ws with c = delta*(delta - 2*diff) and ws = (c < -eps2); the diff^2
+  ## part sums to base, so only the c*ws correction is needed. Non-marker
+  ## genes have delta = 0, so their correction is 0 and self-cancels.
   delta <- mu_mat[1:ncmk, ] * designmat
   diff <- dat[1:ncmk, ] - base_mu_vec
   base <- colSums(diff^2)
@@ -38,23 +50,19 @@ update_C <- function(dat, mu_mat, designmat) {
       next
     }
     diffj <- diff[gj, , drop = FALSE]
-    mat1 <- (diffj - delta[gj, j])^2
-    mat2 <- diffj^2
-    which.smaller <- (mat1 < mat2 - eps2)
-    # On the above, when you compare two float numbers, it is always a good idea to specify
-    # whether you want to include or exclude the equal case
-    dat_dist_mat_mk[, j] <- base - colSums(mat2) + colSums(
-      mat1 * which.smaller + mat2 * (!which.smaller)
-    )
-    dat_dist_mat_mk_cache[, j] <- colSums(which.smaller)
+    dd <- delta[gj, j]
+    c <- dd * (dd - 2 * diffj)
+    ws <- c < -eps2
+    dat_dist_mat_mk[, j] <- base + colSums(c * ws)
+    dat_dist_mat_mk_cache[, j] <- colSums(ws)
   }
 
   ## Additional block: all cluster distances in one BLAS call instead of
-  ## one colSums pass per cluster.
-  dat_ad <- dat[(ncmk + 1):ngenes, , drop = FALSE]
+  ## one colSums pass per cluster. dat_rt_t %*% mu_ad == crossprod(dat_ad,
+  ## mu_ad) but avoids re-copying the constant HVG block every iteration.
   mu_ad <- mu_mat[(ncmk + 1):ngenes, , drop = FALSE]
   dat_dist_mat_ad <- sweep(
-    sweep(-2 * crossprod(dat_ad, mu_ad), 1, colSums(dat_ad^2), "+"),
+    sweep(-2 * (dat_rt_t %*% mu_ad), 1, rt_sq, "+"),
     2,
     colSums(mu_ad^2),
     "+"
@@ -68,7 +76,9 @@ update_C <- function(dat, mu_mat, designmat) {
   # worry about it, my code gives an easy way to get around it.
   dat_dist_mat_rand <- dat_dist_mat +
     stats::rnorm(length(dat_dist_mat)) * .Machine$double.eps^0.5
-  clus <- apply(dat_dist_mat_rand, 1, which.min)
+  # max.col is much faster than apply(which.min); the eps jitter makes exact
+  # ties impossible, and ties.method = "first" picks the first minimum anyway.
+  clus <- max.col(-dat_dist_mat_rand, ties.method = "first")
 
   return(list(clus, dat_dist_mat_mk_cache))
 }

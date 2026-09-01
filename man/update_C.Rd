@@ -4,7 +4,7 @@
 \alias{update_C}
 \title{Update Cluster}
 \usage{
-update_C(dat, mu_mat, designmat)
+update_C(dat, mu_mat, designmat, dat_rt_t = NULL, rt_sq = NULL)
 }
 \arguments{
 \item{dat}{A matrix of input data.}

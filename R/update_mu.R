@@ -20,102 +20,97 @@ update_mu <- function(dat, designmat, clus) {
   rownames(mu_mat) <- NULL
   colnames(mu_mat) <- NULL
 
-  uc <- unique(clus)
+  # Per-cluster cell indices and per-gene marker/zero-column structure are
+  # constant within a call; precompute once instead of re-deriving the
+  # `clus == k` masks in every inner loop.
+  cells <- split(seq_len(nsample), factor(clus, levels = seq_len(nclus)))
+  cnt <- lengths(cells)
+  mk_of <- apply(designmat, 1, function(r) which(r == 1), simplify = FALSE)
+  zc_of <- apply(designmat, 1, function(r) which(r == 0), simplify = FALSE)
 
-  #pre determine baseline level
+  # One BLAS call gives every per-gene per-cluster sum: the marker rows feed
+  # the baseline estimate and the HVG rows the p2 means below. Row sums over
+  # all cells follow as rowSums(sums).
+  ind <- matrix(0, nsample, nclus)
+  ind[cbind(seq_len(nsample), clus)] <- 1
+  sums <- dat %*% ind
+  row_sums <- rowSums(sums[1:nrow(designmat), , drop = FALSE])
+
   n_marker_gene <- nrow(designmat)
-  for (i0 in 1:nrow(mu_mat)) {
-    pck <- clus %in% which(designmat[i0, ] == 0)
-    if (sum(pck) == 0) {
-      mu_mat[i0, ] <- 0
+  # Rows of mu_mat are independent: baseline and the delta/basemu fixed point
+  # of one gene never touch another gene's row, so each gene is solved alone.
+  for (g in 1:n_marker_gene) {
+    mk_all <- mk_of[[g]]
+    zc <- zc_of[[g]]
+    if (length(zc) == 0) {
+      mu_mat[g, ] <- 0
+      next
+    }
+
+    # pre determine baseline level
+    n_zero <- nsample - sum(cnt[mk_all])
+    if (n_zero == 0) {
+      mu_mat[g, ] <- 0
     } else {
-      mu_mat[i0, ] <- mean(dat[
-        i0,
-        clus %in% which(designmat[i0, ] == 0),
-        drop = F
-      ])
-    }
-  }
-
-  update_delta <- function(idx, mu_mat, designmat) {
-    marker_clus <- which(designmat[idx, ] == 1)
-    non_empty_marker_clus <- uc[uc %in% marker_clus]
-    if (length(non_empty_marker_clus) == 0) {
-      return(mu_mat)
-    }
-    if (length(which(designmat[idx, ] == 0)) == 0) {
-      return(mu_mat)
+      s_zero <- row_sums[g] - sum(sums[g, mk_all])
+      mu_mat[g, ] <- s_zero / n_zero
     }
 
-    base_mu <- mu_mat[idx, which(designmat[idx, ] == 0)[1]]
-    #pick out the samples satisfy delta < 2(x-mu) and calculate delta by an iterative approach
-    for (ud in non_empty_marker_clus) {
-      obs <- dat[idx, clus == ud]
-      obs <- obs - base_mu
-      obs <- obs[obs > 0]
-      if (length(obs) == 0) {
-        mu_mat[idx, ud] <- 0
-        next
-      }
+    mk <- mk_all[cnt[mk_all] > 0]
+    if (length(mk) == 0) {
+      mu_mat[g, zc] <- row_sums[g] / nsample
+      next
+    }
 
-      for (i in 1:20) {
-        delta <- mean(obs)
-        picker <- delta < 2 * obs
-        if (sum(picker) == length(picker)) {
-          mu_mat[idx, ud] <- delta
-          break
-        } else {
-          obs <- obs[picker]
+    for (z in 1:20) {
+      mu_old <- mu_mat[g, ]
+
+      # delta estimation: pick out the samples satisfy delta < 2(x-mu)
+      # and calculate delta by an iterative approach
+      base_mu <- mu_mat[g, zc[1]]
+      for (k in mk) {
+        obs <- dat[g, cells[[k]]] - base_mu
+        obs <- obs[obs > 0]
+        if (length(obs) == 0) {
+          mu_mat[g, k] <- 0
+          next
+        }
+        for (i in 1:20) {
+          delta <- sum(obs) / length(obs)
+          picker <- delta < 2 * obs
+          if (all(picker)) {
+            mu_mat[g, k] <- delta
+            break
+          } else {
+            obs <- obs[picker]
+          }
         }
       }
-    }
 
-    return(mu_mat)
-  }
-
-  #this function updates baseline nu (as the symbol used in paper).
-  #All samples will either be used to estimate the delta or the baseline nu.
-  #This function picks out samples that are not used in delta estimation (in update_delta function) and calculates baseline nu.
-  update_basemu <- function(idx, mu_mat, designmat) {
-    marker_clus <- which(designmat[idx, ] == 1)
-    non_empty_marker_clus <- uc[uc %in% marker_clus]
-    if (length(which(designmat[idx, ] == 0)) == 0) {
-      return(mu_mat)
-    }
-    base_mu <- mu_mat[idx, which(designmat[idx, ] == 0)[1]]
-    if (length(non_empty_marker_clus) == 0) {
-      mu_mat[idx, designmat[idx, ] == 0] <- mean(dat[idx, ])
-      return(mu_mat)
-    } else {
-      mu_l <- mean(dat[idx, ])
-      for (ub in non_empty_marker_clus) {
-        J <- dat[idx, clus == ub] > base_mu + .5 * mu_mat[idx, ub]
-        mu_l <- mu_l - sum(J) * mu_mat[idx, ub] / nsample
+      # baseline nu update: samples not used in delta estimation
+      # are used to estimate the baseline nu
+      base_mu <- mu_mat[g, zc[1]]
+      mu_l <- row_sums[g] / nsample
+      for (k in mk) {
+        J <- dat[g, cells[[k]]] > base_mu + .5 * mu_mat[g, k]
+        mu_l <- mu_l - sum(J) * mu_mat[g, k] / nsample
       }
-      mu_mat[idx, designmat[idx, ] == 0] <- mu_l
-    }
-    return(mu_mat)
-  }
+      mu_mat[g, zc] <- mu_l
 
-  for (i in 1:n_marker_gene) {
-    for (z in 1:20) {
-      mu_old <- mu_mat[i, ]
-      mu_mat <- update_delta(i, mu_mat, designmat)
-      mu_mat <- update_basemu(i, mu_mat, designmat)
-      if (mean(abs(mu_old - mu_mat[i, ])) < 10^-6) break
+      if (mean(abs(mu_old - mu_mat[g, ])) < 10^-6) break
     }
   }
 
   #this part estimates mu for other highly variable genes which follows kmeans approach.
   n_total_gene <- nrow(dat)
-  mu_mat_p2 <- matrix(0, n_total_gene - n_marker_gene, nclus)
-
-  for (k in unique(clus)) {
-    mu_mat_p2[, k] <- rowMeans(dat[
-      (n_marker_gene + 1):n_total_gene,
-      clus == k,
-      drop = F
-    ])
+  n_hvg <- n_total_gene - n_marker_gene
+  mu_mat_p2 <- matrix(0, n_hvg, nclus)
+  if (n_hvg > 0) {
+    # sums already holds per-gene per-cluster totals; divide by cluster size
+    mu_mat_p2 <- sweep(
+      sums[(n_marker_gene + 1):n_total_gene, , drop = FALSE], 2, cnt, "/"
+    )
+    mu_mat_p2[, cnt == 0] <- 0
   }
 
   return(rbind(mu_mat, mu_mat_p2))
