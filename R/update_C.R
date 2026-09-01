@@ -15,7 +15,6 @@ update_C <- function(dat, mu_mat, designmat) {
   nclusters <- ncol(mu_mat)
 
   dat_dist_mat_mk <- dat_dist_mat_mk_cache <- matrix(0, ncells, nclusters)
-  dat_dist_mat_ad <- matrix(0, ncells, nclusters)
 
   base_mu_vec <- rep(0, ncmk)
   for (bv in 1:ncmk) {
@@ -25,24 +24,41 @@ update_C <- function(dat, mu_mat, designmat) {
     }
   }
 
-  ## I re-wrote this block to make it ~60 times faster.
+  ## Marker block: non-marker genes contribute the same diff^2 to every
+  ## cluster, so sum them once (base) and only loop over each cluster's
+  ## own marker genes.
   delta <- mu_mat[1:ncmk, ] * designmat
   diff <- dat[1:ncmk, ] - base_mu_vec
+  base <- colSums(diff^2)
+  eps2 <- .Machine$double.eps^0.5
   for (j in 1:nclusters) {
-    mat1 <- (diff - delta[, j])^2
-    mat2 <- diff^2
-    which.smaller <- (mat1 < mat2 - .Machine$double.eps^0.5) * designmat[, j]
+    gj <- which(designmat[, j] == 1)
+    if (length(gj) == 0) {
+      dat_dist_mat_mk[, j] <- base
+      next
+    }
+    diffj <- diff[gj, , drop = FALSE]
+    mat1 <- (diffj - delta[gj, j])^2
+    mat2 <- diffj^2
+    which.smaller <- (mat1 < mat2 - eps2)
     # On the above, when you compare two float numbers, it is always a good idea to specify
     # whether you want to include or exclude the equal case
-    dat_dist_mat_mk[, j] <- colSums(
+    dat_dist_mat_mk[, j] <- base - colSums(mat2) + colSums(
       mat1 * which.smaller + mat2 * (!which.smaller)
     )
     dat_dist_mat_mk_cache[, j] <- colSums(which.smaller)
-
-    dat_dist_mat_ad[, j] <- colSums(
-      (dat[(ncmk + 1):ngenes, ] - mu_mat[(ncmk + 1):ngenes, j])^2
-    )
   }
+
+  ## Additional block: all cluster distances in one BLAS call instead of
+  ## one colSums pass per cluster.
+  dat_ad <- dat[(ncmk + 1):ngenes, , drop = FALSE]
+  mu_ad <- mu_mat[(ncmk + 1):ngenes, , drop = FALSE]
+  dat_dist_mat_ad <- sweep(
+    sweep(-2 * crossprod(dat_ad, mu_ad), 1, colSums(dat_ad^2), "+"),
+    2,
+    colSums(mu_ad^2),
+    "+"
+  )
 
   # calculate the distance matrix
   dat_dist_mat <- dat_dist_mat_mk + dat_dist_mat_ad

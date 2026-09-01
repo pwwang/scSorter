@@ -14,7 +14,9 @@ update_mu <- function(dat, designmat, clus) {
   nclus <- ncol(designmat)
   nsample <- ncol(dat)
 
-  mu_mat <- as.matrix(designmat)
+  # row indexing a data.frame is much slower than a matrix; convert once
+  designmat <- as.matrix(designmat)
+  mu_mat <- designmat
   rownames(mu_mat) <- NULL
   colnames(mu_mat) <- NULL
 

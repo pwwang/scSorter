@@ -51,19 +51,10 @@ update_func <- function(
 
     dat_rt <- dat_rt * sqrt(rest_w)
 
-    weight_decorator <- function(dat_mk, weightmat, clus) {
-      uniclus <- unique(clus)
-      dat_mk2 <- dat_mk
-
-      for (i in uniclus) {
-        marker_w <- weightmat[, i]
-        dat_mk2[, clus == i] <- dat_mk[, clus == i] * sqrt(marker_w)
-      }
-      return(dat_mk2)
-    }
-
     for (i in 1:max_iter) {
-      dat2 <- rbind(weight_decorator(dat_mk, weightmat, cluster), dat_rt)
+      # weightmat[, cluster] indexes each cell's per-cluster marker weights
+      # in one vectorized call, replacing the per-cluster loop
+      dat2 <- rbind(dat_mk * sqrt(weightmat[, cluster]), dat_rt)
       mu <- update_mu(dat2, design_mat, cluster)
       cluster_old <- cluster
       cluster_ot <- update_C(dat2, mu, design_mat)
@@ -78,9 +69,8 @@ update_func <- function(
 
   cache_mat <- cluster_ot[[2]]
   numofmarkergenes <- colSums(design_mat)
-  numofhighexpmkgenes <- sapply(1:nrow(cache_mat), function(x) {
-    cache_mat[x, cluster[x]] / numofmarkergenes[cluster[x]]
-  })
+  numofhighexpmkgenes <- cache_mat[cbind(1:nrow(cache_mat), cluster)] /
+    numofmarkergenes[cluster]
   pks <- numofhighexpmkgenes <= unknown_threshold1
 
   cluster_ukn_helper <- cluster[pks]
