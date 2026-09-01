@@ -30,7 +30,10 @@ scSorter <- function(
 ) {
   #this is a wrapper function that implements the whole method based on the rest functions.
   #Rfast package is needed to run this method.
+  message("[scSorter] Building the design matrix based on the provided marker genes...")
   anno_processed <- design_matrix_builder(anno, default_weight)
+
+  message("[scSorter] Preprocessing the expression data...")
   dt <- data_preprocess(expr, anno_processed)
 
   dat <- dt[[1]]
@@ -42,6 +45,7 @@ scSorter <- function(
   c_clus <- list()
 
   for (i in 1:n_start) {
+    message(paste0("[scSorter] Running initialization ", i, " of ", n_start, "..."))
     set.seed(i + setseed)
     t1 <- Sys.time()
     pred_ot <- update_func(
@@ -53,6 +57,7 @@ scSorter <- function(
       max_iter = max_iter
     )
     t2 <- Sys.time()
+    message(paste0("[scSorter] Initialization ", i, " completed in ", round(difftime(t2, t1, units = "secs"), 2), " seconds."))
 
     c_cost <- c(c_cost, pred_ot[[3]])
     c_mu[[i]] <- pred_ot[[1]]
@@ -103,25 +108,33 @@ RunScSorter <- function(
     stop("The input object must be a Seurat object.")
   }
 
+  message("[RunScSorter] Fetching variable features from the Seurat object...")
   if (is.null(top_vf)) {
     hvf <- VariableFeatures(object)
   } else {
     hvf <- utils::head(VariableFeatures(object), top_vf)
   }
 
+  message("[RunScSorter] Fetching expression data from the Seurat object...")
   expr <- GetAssayData(object, layer = layer, assay = assay)
+
+  message("[RunScSorter] Filtering genes based on minimum expression percentage...")
   hvf_filter <- rowSums(as.matrix(expr)[hvf, ] != 0) > ncol(expr) * min_pct
   hvf <- hvf[hvf_filter]
 
+  message("[RunScSorter] Running scSorter on the filtered expression data...")
   picked_genes <- unique(c(anno$Marker, hvf))
   expr <- expr[intersect(rownames(expr), picked_genes), , drop = FALSE]
-
   result <- scSorter(expr, anno, ...)
+
+  message("[RunScSorter] Adding predicted cell types to the Seurat object metadata...")
   object@meta.data[[name]] <- factor(
     result$Pred_Type,
     levels = sort(unique(result$Pred_Type))
   )
+
   if (set_ident) {
+    message("[RunScSorter] Setting the predicted cell types as the active identity class in the Seurat object...")
     SeuratObject::Idents(object) <- name
   }
   return(object)
